@@ -29,8 +29,9 @@ final class Text {
             trim((str_replace(
                 str_split(".,:;'\"\\@„”`#^/\+\/*!?<>|[](){}=%"), ' ',
                 trim(str_replace(
-                    ['ă','î','â','ș','ț'], ['a','i','a','s','t'],
-                    preg_replace('/[^ăîâșț[:print:]]/', '', mb_strtolower(self::removeAllTags($string)))
+                    ['ă', 'î', 'â', 'ș', 'ş', 'ț'],
+                    ['a', 'i', 'a', 's', 's', 't'],
+                    preg_replace('/[^ăîâșşț[:print:]]/', '', mb_strtolower(self::removeAllTags($string)))
                 ))
             )))
         ));

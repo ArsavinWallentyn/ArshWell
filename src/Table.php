@@ -9,7 +9,8 @@ use Arshwell\Monolith\DB;
 /**
  * Table class for manipulating certain table and its columns.
 */
-abstract class Table {
+abstract class Table
+{
     const DB_CONN = null;
 
     const FILES_NAMESPACE = null;
@@ -28,6 +29,7 @@ abstract class Table {
     private $files = NULL;
     private $addTableFiles = false; // settled by constructor, via object parameter
     private $usesTableFiles = false; // settled by constructor, via children's class FILES constant
+
 
     /**
      * Get number of translation times of the table or a certain column.
@@ -61,19 +63,46 @@ abstract class Table {
         return $count;
     }
 
-    final function files (): ?TableFiles {
-        return $this->files;
+
+
+    protected static function __formatColumns (array $row): array
+    {
+        return $row;
     }
 
-    final function file (string $filekey): ?object {
-        return ($this->files ? $this->files->get($filekey) : NULL);
+    public static function __beforeInsert()
+    {
+        // Overwrite this to hook code before data is inserted
+    }
+    public static function __afterInsert(int $id)
+    {
+        // Overwrite this to hook code after data is inserted
+    }
+    public static function __beforeUpdateId(int $id)
+    {
+        // Overwrite this to hook code before data is updated
+    }
+    public static function __afterUpdateId(int $id)
+    {
+        // Overwrite this to hook code after data is updated
+    }
+    public static function __beforeDeleteId(int $id)
+    {
+        // Overwrite this to hook code before data is deleted
+    }
+    public static function __afterDeleteId(int $id)
+    {
+        // Overwrite this to hook code after data is deleted
     }
 
-    static function fileAccess (int $id_table, string $file): bool {
+    public static function __fileAccess (int $id_table, string $file): bool
+    {
         return true;
     }
 
-    final function __construct (array $columns = NULL, bool $addTableFiles = false, string $fileStorageKey = null) {
+
+    final function __construct (array $columns = NULL, bool $addTableFiles = false, string $fileStorageKey = null)
+    {
         if (!isset(self::$structures[static::class])) {
             // Used only by objects, for removing unnecesary data from array before inserting/updating.
             self::$structures[static::class] = array_flip(array_column(self::columns(), 'COLUMN_NAME'));
@@ -114,8 +143,19 @@ abstract class Table {
         $this->addTableFiles = $addTableFiles;
     }
 
-    final function id (): ?int {
+    final function id (): ?int
+    {
         return $this->id_table;
+    }
+
+    final function files (): ?TableFiles
+    {
+        return $this->files;
+    }
+
+    final function file (string $filekey): ?object
+    {
+        return ($this->files ? $this->files->get($filekey) : NULL);
     }
 
     final function add (): int {
@@ -135,18 +175,21 @@ abstract class Table {
         return $this->id_table;
     }
 
-    final function edit (): bool {
+    final function edit (): bool
+    {
         $columns = array_intersect_key($this->columns, self::$structures[static::class]);
 
-        return (DB::update(array(
-            'class' => static::class,
-            'set'   => implode(' = ?, ', array_keys($columns)) .' = ?',
-            'where' => (static::class)::PRIMARY_KEY .' = '. $this->id_table
-        ), array_values($columns)) > 0);
+        return DB::updateId(
+            static::class,
+            $this->id_table,
+            implode(' = ?, ', array_keys($columns)) .' = ?',
+            array_values($columns)
+        );
     }
 
-    final function remove (): bool {
-        return (DB::delete(static::class, (static::class)::PRIMARY_KEY ." = ?", array($this->id_table)) > 0);
+    final function remove (): bool
+    {
+        return (DB::deleteId(static::class, $this->id_table) > 0);
     }
 
     function translations (string $column): array {
@@ -196,9 +239,7 @@ abstract class Table {
         return static::class;
     }
 
-    protected static function format (array $row): array {
-        return $row;
-    }
+
 
     /* DLQ (Data Query Language) */
 
@@ -212,7 +253,7 @@ abstract class Table {
 
             $result = DB::get(static::class, $id, $columns);
 
-            return ($result ? new static(static::format($result), true) : NULL);
+            return ($result ? new static(static::__formatColumns($result), true) : NULL);
         }
 
         final static function column (string $column, string $where = NULL, array $params = NULL): array {
@@ -242,7 +283,7 @@ abstract class Table {
 
             $result = DB::first($sql, $params);
 
-            return ($result ? new static(static::format($result), $sql['files'], $sql['fileStorageKey'] ?? (defined(static::class ."::FILESTORAGE_KEY") ? (static::class)::FILESTORAGE_KEY : null)) : NULL);
+            return ($result ? new static(static::__formatColumns($result), $sql['files'], $sql['fileStorageKey'] ?? (defined(static::class ."::FILESTORAGE_KEY") ? (static::class)::FILESTORAGE_KEY : null)) : NULL);
         }
 
         final static function count (string $where = NULL, array $params = NULL): int {
@@ -258,7 +299,7 @@ abstract class Table {
             }
 
             return (array_map(function ($row) use ($columns) {
-                return new static(static::format($row), true);
+                return new static(static::__formatColumns($row), true);
             }, DB::all(static::class, $columns, $order)) ?? array());
         }
 
@@ -281,14 +322,14 @@ abstract class Table {
 
             if (!isset($sql['sort'])) {
                 return (array_map(function ($row) use ($sql) {
-                    return (new static(static::format($row), $sql['files'], $sql['fileStorageKey'] ?? (defined(static::class ."::FILESTORAGE_KEY") ? (static::class)::FILESTORAGE_KEY : null)));
+                    return (new static(static::__formatColumns($row), $sql['files'], $sql['fileStorageKey'] ?? (defined(static::class ."::FILESTORAGE_KEY") ? (static::class)::FILESTORAGE_KEY : null)));
                 }, DB::select($sql, $params)) ?? array());
             }
             else {
                 $results = DB::select($sql, $params);
                 foreach ($results as $i => $result) {
                     foreach ($result as $j => $row) {
-                        $results[$i][$j] = new static(static::format($row), $sql['files'], $sql['fileStorageKey'] ?? (defined(static::class ."::FILESTORAGE_KEY") ? (static::class)::FILESTORAGE_KEY : null));
+                        $results[$i][$j] = new static(static::__formatColumns($row), $sql['files'], $sql['fileStorageKey'] ?? (defined(static::class ."::FILESTORAGE_KEY") ? (static::class)::FILESTORAGE_KEY : null));
                     }
                 }
                 return $results;
@@ -297,27 +338,42 @@ abstract class Table {
 
     /* DML (Data Manipulation Language) */
 
-        final static function insert (string $columns, $values, array $params = NULL): int {
+        final static function insert (string $columns, $values, array $params = NULL): int
+        {
             return DB::insert(static::class, $columns, $values, $params);
         }
 
-        final static function update (array $sql, array $params = NULL): int {
+        final static function update (array $sql, array $params = NULL): int
+        {
             $sql['class'] = static::class;
 
             return DB::update($sql, $params);
         }
 
-        final static function delete (string $where = NULL, array $params = NULL): int {
+        final static function updateId (int $id, string $set, array $params = NULL): int
+        {
+            return DB::updateId(static::class, $id, $set, $params);
+        }
+
+        final static function delete (string $where = NULL, array $params = NULL): int
+        {
             return DB::delete(static::class, $where, $params);
-    }
+        }
+
+        final static function deleteId (int $id): int
+        {
+            return DB::delete(static::class, $id);
+        }
 
     /* DDL (Data Definition Language) */
 
-        final static function columns (bool $add_primary_key = false): array {
+        final static function columns (bool $add_primary_key = false): array
+        {
             return DB::columnsTable((static::class)::TABLE, $add_primary_key);
         }
 
-        final static function truncate () {
+        final static function truncate ()
+        {
             DB::truncateTable((static::class)::TABLE);
         }
 }

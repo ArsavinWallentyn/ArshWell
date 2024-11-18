@@ -44,7 +44,12 @@ final class Select {
                     <div class="col order-2 col-sm-3 col-lg-auto card">
                         <div class="card-body text-right py-3">
                             <?= Piece::columns(
-                                    array_diff_key($front['fields'], array_flip($module['back']['actions']['select']['columns']['private'] ?? array())),
+                                    array_filter(
+                                        array_diff_key($front['fields'], array_flip($module['back']['actions']['select']['columns']['private'] ?? array())),
+                                        function (array $filter) {
+                                            return !($filter['LAYOUT']['isSavingOption'] ?? false);
+                                        }
+                                    ),
                                     $module['query']['columns'] ?? array()
                                 ) ?>
                         </div>

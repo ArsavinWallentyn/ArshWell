@@ -2,8 +2,8 @@
 
 namespace Arshwell\Monolith\Module\Syntax\Frontend\Field;
 
-class JS {
-
+class JS
+{
     public static function AJAX (bool $AJAX): bool {
         return $AJAX;
     }

@@ -203,8 +203,16 @@ final class Update {
                                     function ($key, $input) use ($back, $field) {
                                         $array = array();
 
+                                        if (empty($field['PHP']['shouldBeSaved'])) {
+                                            $field['PHP']['shouldBeSaved'] = function ($value, $lg) {
+                                                return true;
+                                            };
+                                        }
+
                                         foreach ((($back['DB']['table'])::TRANSLATOR)::LANGUAGES as $lg) {
-                                            $array[$lg] = ($field['PHP']['rules']['update'] ?? $field['PHP']['rules']);
+                                            if ($field['PHP']['shouldBeSaved']($input[$lg] ?? null, $lg)) {
+                                                $array[$lg] = ($field['PHP']['rules']['update'] ?? $field['PHP']['rules']);
+                                            }
                                         }
 
                                         return $array;
@@ -212,7 +220,15 @@ final class Update {
                                 );
                             }
                             else { // is not translated
-                                $array[$key] = ($field['PHP']['rules']['update'] ?? $field['PHP']['rules']);
+                                if (empty($field['PHP']['shouldBeSaved'])) {
+                                    $field['PHP']['shouldBeSaved'] = function ($value) {
+                                        return true;
+                                    };
+                                }
+
+                                if ($field['PHP']['shouldBeSaved']($value[$key] ?? null)) {
+                                    $array[$key] = ($field['PHP']['rules']['update'] ?? $field['PHP']['rules']);
+                                }
                             }
                         }
                     }

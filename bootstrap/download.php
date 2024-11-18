@@ -47,7 +47,7 @@ foreach (StaticHandler::getEnvConfig('filestorages') as $fileStorageKey => $file
         }
 
         if (call_user_func_array(
-                array(Folder::decode($matches['class']), 'fileAccess'),
+                array(Folder::decode($matches['class']), '__fileAccess'),
                 array($matches['id_table'], $matches['filekey'], $matches['language'], $matches['size'], $matches['extension'])
             )
         ) {

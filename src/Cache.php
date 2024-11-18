@@ -5,8 +5,11 @@ namespace Arshwell\Monolith;
 use Arshwell\Monolith\Folder;
 use Arshwell\Monolith\File;
 use Exception;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 
-final class Cache {
+final class Cache
+{
     static private $project = NULL; // Arshwell project
     static private $folder = 'caches/';
 
@@ -86,6 +89,21 @@ final class Cache {
 
             return true;
         }
+    }
+
+    static function deleteByKeyword(string $word): bool
+    {
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(Folder::root() . self::$folder));
+
+        foreach ($iterator as $file) {
+            if ($file->isFile() && strpos($file->getFilename(), $word) !== false) {
+                if (unlink($file->getPathname()) == false) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     static function file (string $key, bool $basename = false): string {

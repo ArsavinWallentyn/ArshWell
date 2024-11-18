@@ -1006,7 +1006,7 @@ final class Field {
 
         ob_start(); ?>
 
-            <div <?= ($language ? 'language="'.$language.'"' : '') ?> class="custom-control custom-checkbox d-flex pl-0 my-2">
+            <div <?= ($language ? 'language="'.$language.'"' : '') ?> class="custom-control custom-checkbox d-flex mt-1 mb-2">
                 <input
                 type="checkbox"
                 class="custom-control-input"

@@ -100,7 +100,10 @@ $(document).ready(function () {
             if (event.offsetX > this.offsetWidth) { // ::after was clicked
                 var container = $(this).closest('[data-lg][data-key]');
 
-                $(this).closest('.card').find('.card-body [data-lg="'+ container.data('lg') +'"][data-key="'+ container.data('key') +'"]').fadeOut(0);
+                $(this).closest('.card')
+                    .find('.card-body [data-lg="'+ container.data('lg') +'"][data-key="'+ container.data('key') +'"]')
+                    .fadeOut(0)
+                ;
 
                 var lg = (
                     $(container).next('[data-lg][data-key]:not([data-lg=""]):not([data-lg="'+ container.data('lg') +'"])').length
@@ -112,9 +115,12 @@ $(document).ready(function () {
 
                 $(this).css('pointer-events', 'none');
 
-                $(this).closest('.card').find('.card-body [data-lg="'+ lg +'"][data-key="'+ container.data('key') +'"]').fadeIn(350, function () {
-                    $(this).find('[language]').css('pointer-events', 'auto');
-                });
+                $(this).closest('.card')
+                    .find('.card-body [data-lg="'+ lg +'"][data-key="'+ container.data('key') +'"]')
+                    .fadeIn(350, function () {
+                        $(this).find('[language]').css('pointer-events', 'auto');
+                    })
+                ;
             }
         });
     })();

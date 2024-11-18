@@ -2,12 +2,8 @@
 
 namespace Arshwell\Monolith\Module\Syntax\Frontend\Field;
 
-final class HTML {
-
-    static function wrappers (array $classes): array {
-        return $classes;
-    }
-
+final class HTML
+{
     /**
      * (array|string) $notes
     */

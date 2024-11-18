@@ -650,7 +650,8 @@ final class Piece {
         return ob_get_clean();
     }
 
-    static function field (string $key, array $field, TableSegment $segment = NULL, array $languages = NULL): string {
+    static function field (string $key, array $field, TableSegment $segment = NULL, array $languages = NULL): string
+    {
         // run $field if it is a closure
         if (!is_string($field) && is_callable($field)) {
             $field = $field(
@@ -660,12 +661,18 @@ final class Piece {
             );
         }
 
+        $field['LAYOUT'] = array_replace_recursive(
+            array(
+                'rowColumns' => array(
+                    'xs' => 12,
+                ),
+                'isSavingOption' => false,
+            ),
+            $field['LAYOUT'] ?? []
+        );
+
         $field['HTML'] = array_replace_recursive(
             array(
-                'wrappers' => array(
-                    "col-12 col-sm-4 col-md-3 col-xl-2",
-                    "col-12 col-sm-8 col-md-9 col-xl-10"
-                ),
                 'icon'          => NULL,
                 'label'         => NULL,
                 'type'          => 'text',
@@ -695,98 +702,111 @@ final class Piece {
             }
         });
 
-        list($class_1, $class_2) = array_values($field['HTML']['wrappers']);
-
         if (!$languages) {
             $languages = array(NULL);
         }
 
-        ob_start();
+        $bt_row_columns = implode(' ', array_map(function (string $resolution, int $cols) {
+            if ($resolution == 'xs') {
+                return "col-{$cols}";
+            }
 
+            return "col-{$resolution}-{$cols}";
+        }, array_keys($field['LAYOUT']['rowColumns']), $field['LAYOUT']['rowColumns']));
+
+        ob_start();
             foreach ($languages as $i => $lg) {
                 if (empty($field['HTML']['id'])) {
                     $field['HTML']['id'] = ("data-".Text::slug($key));
                 } ?>
 
-                <div data-key="<?= $field['HTML']['id'] ?>" <?= (count($languages) > 1 ? 'data-lg="'.$lg .'"' : '') ?>
-                class="<?= $class_1 ?> text-muted py-sm-2" <?= ($field['HTML']['hidden'] || $i > 0 ? 'style="display: none;"' : '') ?>>
-                    <label <?= ($field['HTML']['label'] ? 'title="'.$field['HTML']['label'].'"' : '') ?>
-                    for="<?= $field['HTML']['id'] ?><?= $lg ? "-$lg" : '' ?>">
-                        <?php
-                        if ($field['HTML']['icon']) {
-                            switch ($field['HTML']['icon']['style'] ?? NULL) {
-                                case NULL:
-                                case 'solid': {
-                                    $fa_class = 'fas';
-                                    break;
-                                }
-                                case 'regular': {
-                                    $fa_class = 'far';
-                                    break;
-                                }
-                                case 'brand': {
-                                    $fa_class = 'fab';
-                                    break;
-                                }
-                            } ?>
-                            <i class="<?= $fa_class ?> fa-fw fa-<?= $field['HTML']['icon']['name'] ?? $field['HTML']['icon'] ?>"></i>
-                        <?php }
-                        if ($field['HTML']['label']) {
-                            echo $field['HTML']['label'];
-                        }
-                        if (!empty($field['HTML']['required'])) { ?>
-                            <span class="text-danger">*</span>
-                        <?php } ?>
-                    </label>
-                </div>
-                <div data-key="<?= $field['HTML']['id'] ?>" <?= (count($languages) > 1 ? 'data-lg="'.$lg .'"' : '') ?>
-                class="<?= $class_2 ?> py-sm-2" <?= ($field['HTML']['hidden'] || $i > 0 ? 'style="display: none;"' : '') ?>>
+                <div class="<?= $bt_row_columns ?> margin-1st-0"
+                data-key="<?= $field['HTML']['id'] ?>"
+                <?= (count($languages) > 1 ? 'data-lg="'.$lg .'"' : '') ?>
+                <?= ($field['HTML']['hidden'] || $i > 0 ? 'style="display: none;"' : '') ?>>
+
                     <?php
-                    if ($segment && (!isset($field['HTML']['value']) || $field['HTML']['overwrite'])) {
-                        switch ($field['HTML']['type']) {
-                            case 'doc':
-                            case 'docs':
-                            case 'video':
-                            case 'image':
-                            case 'images': {
-                                $field['HTML']['value'] = $segment;
-                                break;
+                    if ($field['HTML']['icon'] || $field['HTML']['label']) { ?>
+                        <!-- label -->
+                        <label class="text-muted" <?= ($field['HTML']['label'] ? 'title="'.$field['HTML']['label'].'"' : '') ?>
+                        for="<?= $field['HTML']['id'] ?><?= $lg ? "-$lg" : '' ?>">
+                            <?php
+                            if ($field['HTML']['icon']) {
+                                switch ($field['HTML']['icon']['style'] ?? NULL) {
+                                    case NULL:
+                                    case 'solid': {
+                                        $fa_class = 'fas';
+                                        break;
+                                    }
+                                    case 'regular': {
+                                        $fa_class = 'far';
+                                        break;
+                                    }
+                                    case 'brand': {
+                                        $fa_class = 'fab';
+                                        break;
+                                    }
+                                } ?>
+                                <i class="<?= $fa_class ?> fa-fw fa-<?= $field['HTML']['icon']['name'] ?? $field['HTML']['icon'] ?>"></i>
+                            <?php }
+                            if ($field['HTML']['label']) {
+                                echo $field['HTML']['label'];
                             }
-                            case 'select': {
-                                if (empty($field['HTML']['multiple'])) {
-                                    $field['HTML']['value'] = (array)$segment->value($lg);
+                            if (!empty($field['HTML']['required'])) { ?>
+                                <span class="text-danger">*</span>
+                            <?php } ?>
+                        </label>
+                    <?php } ?>
+
+                    <!-- field -->
+                    <div class="pb-sm-2">
+                        <?php
+                        if ($segment && (!isset($field['HTML']['value']) || $field['HTML']['overwrite'])) {
+                            switch ($field['HTML']['type']) {
+                                case 'doc':
+                                case 'docs':
+                                case 'video':
+                                case 'image':
+                                case 'images': {
+                                    $field['HTML']['value'] = $segment;
+                                    break;
                                 }
-                                else {
-                                    $field['HTML']['value'] = array_keys($segment->value($lg));
+                                case 'select': {
+                                    if (empty($field['HTML']['multiple'])) {
+                                        $field['HTML']['value'] = (array)$segment->value($lg);
+                                    }
+                                    else {
+                                        $field['HTML']['value'] = array_keys($segment->value($lg));
+                                    }
+                                    break;
                                 }
-                                break;
-                            }
-                            case 'checkbox': {
-                                $field['HTML']['checked'] = ($field['HTML']['value'] == $segment->value($lg));
-                                break;
-                            }
-                            default: {
-                                $field['HTML']['value'] = $segment->value($lg);
-                                break;
+                                case 'checkbox': {
+                                    $field['HTML']['checked'] = ($field['HTML']['value'] == $segment->value($lg));
+                                    break;
+                                }
+                                default: {
+                                    $field['HTML']['value'] = $segment->value($lg);
+                                    break;
+                                }
                             }
                         }
-                    }
 
-                    if (empty($field['HTML']['name'])) {
-                        $field['HTML']['name'] = "data[$key]";
-                    }
+                        if (empty($field['HTML']['name'])) {
+                            $field['HTML']['name'] = "data[$key]";
+                        }
 
-                    echo array(
-                        'Arshwell\Monolith\Module\HTML\Field',
-                        $field['HTML']['type']
-                    )($field, $lg); ?>
+                        echo array(
+                            'Arshwell\Monolith\Module\HTML\Field',
+                            $field['HTML']['type']
+                        )($field, $lg); ?>
+                    </div>
                 </div>
             <?php }
 
         return ob_get_clean();
     }
 
-    static function saver (array $afters, bool $preservation = false): string {
+    static function saver (array $afters, array $savingOptions, bool $preservation = false): string {
         ob_start(); ?>
 
             <div class="arshmodule-html asrhmodule-html-piece arshmodule-html-piece-saver">
@@ -826,10 +846,20 @@ final class Piece {
                                         } ?>
                                     </select>
                                 </div>
-                            <?php }
+                            <?php } ?>
+                            <div class="col-12">
+                                <?php
+                                if ($savingOptions)  {
+                                    echo Piece::fields(
+                                        '',
+                                        $savingOptions
+                                    );
+                                } ?>
+                            </div>
+                            <?php
                             if ($preservation) { ?>
                                 <div class="col-sm-auto my-1 col-lg-12 mr-auto">
-                                    <div class="custom-control custom-checkbox pl-0">
+                                    <div class="custom-control custom-checkbox">
                                         <input
                                         type="checkbox"
                                         class="custom-control-input"

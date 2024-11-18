@@ -43,7 +43,9 @@ final class Insert {
                         	<div class="card-body pt-2 pb-0">
                                 <?= Piece::fields(
                                     $module['back']['DB']['table'],
-                                    $front['fields'],
+                                    array_filter($front['fields'], function (array $filter) {
+                                        return !($filter['LAYOUT']['isSavingOption'] ?? false);
+                                    }),
                                     $module['response']['data'],
                                     call_user_func(function () use ($module) { // translated fields in form (columns & images)
                                         $files = array();
@@ -83,6 +85,9 @@ final class Insert {
                                         );
                                     }
                                 )),
+                                array_filter($front['fields'], function (array $filter) {
+                                    return $filter['LAYOUT']['isSavingOption'] ?? false;
+                                }),
                                 true
                             ) ?>
                     </div>

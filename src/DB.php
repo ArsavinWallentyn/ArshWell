@@ -13,13 +13,14 @@ use PDO;
 
  * @package https://github.com/arshwell/monolith
 */
-final class DB {
-    private static $pdos        = array();
-    private static $backups     = array();
+final class DB
+{
+    private static $defaultDbConnKey = NULL;
+
+    private static $pdos = array();
+    private static $backups = array();
     private static $tb_prefixes = array();
 
-    /** @var string */
-    private static $defaultDbConnKey = NULL;
 
     final static function connect (string $dbConnKey): void {
         if (self::$defaultDbConnKey == null) {
@@ -48,13 +49,16 @@ final class DB {
         }
     }
 
-    final static function key (): ?string {
+    final static function key (): ?string
+    {
         return self::$defaultDbConnKey;
     }
 
+
     /* TCL (Transaction Control Language) */
 
-        final static function beginTransaction (): void {
+        final static function beginTransaction (): void
+        {
             self::$pdos[self::$defaultDbConnKey]->beginTransaction();
 
             if (isset(self::$backups[self::$defaultDbConnKey])) {
@@ -63,7 +67,8 @@ final class DB {
                 }
             }
         }
-        final static function rollback (): void {
+        final static function rollback (): void
+        {
             if (self::$pdos[self::$defaultDbConnKey]->inTransaction()) {
                 self::$pdos[self::$defaultDbConnKey]->rollback();
 
@@ -74,7 +79,8 @@ final class DB {
                 }
             }
         }
-        final static function commit (): void {
+        final static function commit (): void
+        {
             if (self::$pdos[self::$defaultDbConnKey]->inTransaction()) {
                 self::$pdos[self::$defaultDbConnKey]->commit();
 
@@ -86,144 +92,11 @@ final class DB {
             }
         }
 
-        final private static function prefix (string $tb_prefix, string $query, bool $dml_dql = false, bool $ddl = false): string {
-            // table.*          => pr_table.*
-            // table.column     => pr_table.column
-            // table.`column`   => pr_table.`column`
-            $query = preg_replace(
-                "/(^|\(|\s|,) ((?:\w+\.\*) | (?:\w+\.\w+(?::lg)?) | (?:\w+\.`\w+(?::lg)?`)) (,|\s|\)|;|$)/x",
-                '$1'.$tb_prefix.'$2$3',
-                $query
-            );
-
-            // `table`.*        => `pr_table`.*
-            // `table`.column   => `pr_table`.column
-            // `table`.`column` => `pr_table`.`column`
-            $query = preg_replace(
-                "/(^|\(|\s|,) (`) ((?:\w+`\.\*) | (?:\w+`\.\w+(?::lg)?) | (?:\w+`\.`\w+(?::lg)?`)) (,|\s|\)|;|$)/x",
-                '$1$2'.$tb_prefix.'$3$4',
-                $query
-            );
-
-            // FOREIGN KEY column REFERENCES table(column) => FOREIGN KEY column REFERENCES pr_table(column)
-            $query = preg_replace(
-                "/ (FOREIGN \s+ KEY \s+ \(\w+\) \s+ REFERENCES \s+) (\w+ \(\w+\)) /x",
-                '$1'.$tb_prefix.'$2',
-                $query
-            );
-
-            if ($dml_dql || $ddl) {
-                $commands = array();
-
-                // Data Manipulation Language (DML) && Data Query Language (DQL)
-                if ($dml_dql) {
-                    $commands = array_merge($commands, array(
-                        'INSERT INTO', 'UPDATE', 'FROM'
-                    ));
-                }
-
-                // Data Definition Language (DDL)
-                if ($ddl) {
-                    $commands = array_merge($commands, array(
-                        'CREATE TABLE', 'DROP TABLE', 'ALTER TABLE', 'TRUNCATE TABLE'
-                    ));
-                }
-
-                // table => pr_table
-                $query = preg_replace(
-                    // "/(^|\(|\s|,) ((?:INSERT INTO) | (?:UPDATE) | (?:FROM) | (?:CREATE TABLE) | (?:DROP TABLE) | (?:ALTER TABLE) | (?:TRUNCATE TABLE)) (\s+) (\w+) (,|\s|\)|;|$)/x",
-                    "/(^|\(|\s|,) (".implode(' | ', array_map(function($command) {
-                        return "(?:$command)";
-                    }, $commands)).") (\s+) (\w+) (,|\s|\)|;|$)/x",
-                    '$1$2$3'.$tb_prefix.'$4$5',
-                    $query
-                );
-
-                // `table` => `pr_table`
-                $query = preg_replace(
-                    // "/(^|\(|\s|,) ((?:INSERT INTO) | (?:UPDATE) | (?:FROM) | (?:CREATE TABLE) | (?:DROP TABLE) | (?:ALTER TABLE) | (?:TRUNCATE TABLE)) (\s+`) (\w+`) (,|\s|\)|;|$)/x",
-                    "/(^|\(|\s|,) (".implode(' | ', array_map(function($command) {
-                        return "(?:$command)";
-                    }, $commands)).") (\s+`) (\w+`) (,|\s|\)|;|$)/x",
-                    '$1$2$3'.$tb_prefix.'$4$5',
-                    $query
-                );
-            }
-
-            return $query;
-        }
-
-        final private static function languages (string $dbConnKey, string $query, string $class, array &$params = NULL): string {
-            $regex = "/(^|\(|\s|,|`)((".self::$tb_prefixes[$dbConnKey].")(\w+)\.)?(\w+)(:lg)((\s+AS\s+\w+)(:lg))?(`|,|\s|\)|;|$)/i";
-
-            if (preg_match($regex, $query, $matches)) {
-                $nr_langs_per_column = array(); // for replacing ?:lg with real count of placeholders
-
-                $languages = NULL;
-
-                if (empty($params[':lg'])) {
-                    if (($class)::translationTimes() > 0) {
-                        $languages = array((($class)::TRANSLATOR)::get());
-                    }
-                    else {
-                        throw new Exception(
-                            "|Arshwell| ".static::class."::languages() query can't replace :lg placeholders;
-                            Should be send as params or fetched from your class const TRANSLATOR"
-                        );
-                    }
-                }
-
-                $query = preg_replace_callback(
-                    $regex,
-                    function ($matches) use ($languages, $params, &$nr_langs_per_column) {
-                        /***************** example ******************
-                        $matches (
-                            [0] =>  br_services.title:lg AS anaaremere:lg,
-                            [1] =>
-                            [2] => br_services.
-                            [3] => br_
-                            [4] => services
-                            [5] => title
-                            [6] => :lg
-                            [7] =>  AS anaaremere:lg
-                            [8] =>  AS anaaremere
-                            [9] => :lg
-                            [10] => ,
-                        )
-                        ********************************************/
-
-                        if (!empty($params[':lg'])) {
-                            $languages = (array)($params[':lg'][$matches[4].'.'.$matches[5]] ?? $params[':lg']);
-                        }
-
-                        $nr_langs_per_column[] = count($languages); // record languages mentioned for this column
-
-                        return $matches[1].implode(',', array_map(function (string $lg) use ($matches) {
-                            return $matches[2].$matches[5].'_'.$lg.($matches[7] ? $matches[8].'_'.$lg : '');
-                        }, $languages)).$matches[10];
-                    },
-                    $query
-                );
-
-                // Create all necessary placeholders
-                // according to every mentioned languages of the column.
-                foreach ($nr_langs_per_column as $nr) {
-                    $query = preg_replace('/\?\:lg/', rtrim(str_repeat('?, ', $nr), ", "), $query, 1);
-                }
-                foreach ($nr_langs_per_column as $nr) {
-                    $query = preg_replace('/(\:\w+)\:lg/', rtrim(str_repeat('$1, ', $nr), ", "), $query, 1);
-                }
-
-                unset($params[':lg']); // destroy if exists
-            }
-
-            return $query;
-        }
-
 
     /* DLQ (Data Query Language) */
 
-        final static function get (string $class, int $id, string $columns): ?array {
+        final static function get (string $class, int $id, string $columns): ?array
+        {
             $dbConnKey = (defined("{$class}::DB_CONN_KEY") ? ($class)::DB_CONN_KEY : self::$defaultDbConnKey);
 
             $query = "SELECT ".$columns." FROM ".self::$tb_prefixes[$dbConnKey].($class)::TABLE ." WHERE ". ($class)::PRIMARY_KEY ." = ". $id;
@@ -246,7 +119,8 @@ final class DB {
             return ($result->fetch(PDO::FETCH_ASSOC) ?: array());
         }
 
-        final static function column (string $class, string $column, string $where = NULL, array $params = NULL): array {
+        final static function column (string $class, string $column, string $where = NULL, array $params = NULL): array
+        {
             $dbConnKey = (defined("{$class}::DB_CONN_KEY") ? ($class)::DB_CONN_KEY : self::$defaultDbConnKey);
 
             $query = "SELECT ". $column ." FROM ".self::$tb_prefixes[$dbConnKey].($class)::TABLE;
@@ -273,7 +147,8 @@ final class DB {
             return array_column($result->fetchAll(PDO::FETCH_NUM), 0);
         }
 
-        final static function field (string $class, string $column, string $where = NULL, array $params = NULL): ?string {
+        final static function field (string $class, string $column, string $where = NULL, array $params = NULL): ?string
+        {
             $dbConnKey = (defined("{$class}::DB_CONN_KEY") ? ($class)::DB_CONN_KEY : self::$defaultDbConnKey);
 
             $query = "SELECT ". $column ." FROM ".self::$tb_prefixes[$dbConnKey].($class)::TABLE;
@@ -303,7 +178,8 @@ final class DB {
             return ($result[0] ?? NULL);
         }
 
-        final static function first (array $sql, array $params = NULL): ?array {
+        final static function first (array $sql, array $params = NULL): ?array
+        {
             $dbConnKey = (defined("{$sql['class']}::DB_CONN_KEY") ? ($sql['class'])::DB_CONN_KEY : self::$defaultDbConnKey);
 
             $sql['columns'] = self::prefix(self::$tb_prefixes[$dbConnKey], $sql['columns']);
@@ -350,7 +226,8 @@ final class DB {
             return ($result->fetch(PDO::FETCH_ASSOC) ?: NULL);
         }
 
-        final static function count (string $class, string $where = NULL, array $params = NULL): int {
+        final static function count (string $class, string $where = NULL, array $params = NULL): int
+        {
             $dbConnKey = (defined("{$class}::DB_CONN_KEY") ? ($class)::DB_CONN_KEY : self::$defaultDbConnKey);
 
             $query = "SELECT COUNT(*) FROM ". self::$tb_prefixes[$dbConnKey].($class)::TABLE;
@@ -379,7 +256,8 @@ final class DB {
             return ($result['COUNT(*)'] ?? 0);
         }
 
-        final static function all (string $class, $columns, string $order = NULL): array {
+        final static function all (string $class, $columns, string $order = NULL): array
+        {
             $dbConnKey = (defined("{$class}::DB_CONN_KEY") ? ($class)::DB_CONN_KEY : self::$defaultDbConnKey);
 
             $query = "SELECT ".$columns." FROM ".self::$tb_prefixes[$dbConnKey].($class)::TABLE;
@@ -406,7 +284,8 @@ final class DB {
             return $result->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        final static function select (array $sql, array $params = NULL): array {
+        final static function select (array $sql, array $params = NULL): array
+        {
             $dbConnKey = (defined("{$sql['class']}::DB_CONN_KEY") ? ($sql['class'])::DB_CONN_KEY : self::$defaultDbConnKey);
 
             if (trim($sql['columns']) != '*' && isset($sql['sort']) && !preg_match("/(^(\s+)?|.+,(\s+)?)". $sql['sort'] ."((\s+)?,.+|$)/", $sql['columns'])) {
@@ -476,7 +355,8 @@ final class DB {
 
     /* DML (Data Manipulation Language) */
 
-        final static function insert (string $class, string $columns, $values, array $params = NULL): int {
+        final static function insert (string $class, string $columns, $values, array $params = NULL): int
+        {
             $dbConnKey = (defined("{$class}::DB_CONN_KEY") ? ($class)::DB_CONN_KEY : self::$defaultDbConnKey);
 
             $query = "INSERT INTO ". self::$tb_prefixes[$dbConnKey].($class)::TABLE ." (". $columns .") VALUES (". (is_string($values) ? $values : implode('),(', array_map(function ($columns) {
@@ -486,13 +366,21 @@ final class DB {
             $query = self::languages($dbConnKey, $query, $class, $params);
 
             try {
+                ($class)::__beforeInsert();
+
                 self::$pdos[$dbConnKey]->prepare($query)->execute($params);
 
+                ($class)::__afterInsert(self::$pdos[$dbConnKey]->lastInsertId());
+
+
                     if (isset(self::$backups[$dbConnKey])) {
+                        // insert in backup databases
+
                         foreach (self::$backups[$dbConnKey] as $db_key) {
                             self::$pdos[$db_key]->prepare($query)->execute($params);
                         }
                     }
+
 
                 return self::$pdos[$dbConnKey]->lastInsertId();
             }
@@ -506,19 +394,14 @@ final class DB {
             }
         }
 
-        final static function update (array $sql, array $params = NULL): int {
+        /**
+         * @return int rows count updated
+         */
+        final static function update (array $sql, array $params = NULL): int
+        {
             $dbConnKey = (defined("{$sql['class']}::DB_CONN_KEY") ? ($sql['class'])::DB_CONN_KEY : self::$defaultDbConnKey);
 
-            $query = "UPDATE ". self::$tb_prefixes[$dbConnKey].($sql['class'])::TABLE ." SET ". preg_replace("/(?<=^|,)(\s*\w+(\:lg)?)\s*(?=(,|$))/x", "$1 = ?", $sql['set']);
-
-            /* Back up for preg_replace() regex.
-                Add to unassigned columns, from $sql['set'], an " = ?".
-
-                1. preg_replace(['/([a-zA-Z]+)\s*(?:(,)|$)/i', '/ +,/i'], ['\1 = ?\2', ','], $sql['set']);
-                2. preg_replace("/ (?<= ^|,|,\s)  ([a-z]+)  (?=\s*(,|$)) /x", "$1 = ?", $sql['set']);
-                3. preg_replace("/(?<=^|,)(\s*\w+(\:lg)?)\s*(?=(,|$))/x", "$1 = ?", $sql['set']);
-
-            TODO: Don't delete this comment 'till you are sure that used preg_replace() is perfect always */
+            $query = "UPDATE ". self::$tb_prefixes[$dbConnKey].($sql['class'])::TABLE ." SET ". self::normalizeOrphansSetters($sql['set']);
 
             if (isset($sql['where'])) {
                 $query .= " WHERE ". self::prefix(self::$tb_prefixes[$dbConnKey], $sql['where'], true);
@@ -542,11 +425,15 @@ final class DB {
 
                 $result->execute();
 
+
                     if (isset(self::$backups[$dbConnKey])) {
+                        // update in backup databases
+
                         foreach (self::$backups[$dbConnKey] as $db_key) {
                             self::$pdos[$db_key]->prepare($query)->execute($params);
                         }
                     }
+
 
                 return $result->rowCount();
             }
@@ -560,7 +447,67 @@ final class DB {
             }
         }
 
-        final static function delete (string $class, string $where = NULL, array $params = NULL): int {
+        /**
+         * @return int rows count updated
+         */
+        final static function updateId (string $class, int $id, string $set, array $params = NULL): int
+        {
+            $dbConnKey = (defined("{$class}::DB_CONN_KEY") ? ($class)::DB_CONN_KEY : self::$defaultDbConnKey);
+
+            $query = (
+                "UPDATE ". self::$tb_prefixes[$dbConnKey].($class)::TABLE ." SET ". self::normalizeOrphansSetters($set) .
+                " WHERE ". self::prefix(self::$tb_prefixes[$dbConnKey], ($class)::PRIMARY_KEY .' = '. $id, true)
+            );
+
+            $query = self::languages($dbConnKey, $query.';', $class, $params);
+
+            try {
+                $result = self::$pdos[$dbConnKey]->prepare($query);
+
+                if ($params) {
+                    foreach ($params as $dbConnKey => $param) {
+                        $result->bindValue(
+                            is_int($dbConnKey) ? ($dbConnKey)+1 : $dbConnKey,
+                            $param,
+                            // really check if integer, because very long digits crash
+                            (is_numeric($param) && $param == (int)$param) ? PDO::PARAM_INT : PDO::PARAM_STR
+                        );
+                    }
+                }
+
+                ($class)::__beforeUpdateId($id);
+
+                $result->execute();
+
+                ($class)::__afterUpdateId($id);
+
+
+                    if (isset(self::$backups[$dbConnKey])) {
+                        // update in backup databases
+
+                        foreach (self::$backups[$dbConnKey] as $db_key) {
+                            self::$pdos[$db_key]->prepare($query)->execute($params);
+                        }
+                    }
+
+
+                return $result->rowCount();
+            }
+            catch (PDOException $e) {
+                if (StaticHandler::isCRON() == false) {
+                    DevToolDebug::print_pdo_exception($e, $query, $params);
+                }
+                else {
+                    throw new Exception($e->getMessage(), $e->getCode(), $e);
+                }
+            }
+        }
+
+        /**
+         * @return int rows count deleted
+         */
+        final static function delete (string $class, string $where = NULL, array $params = NULL): int
+        {
             $dbConnKey = (defined("{$class}::DB_CONN_KEY") ? ($class)::DB_CONN_KEY : self::$defaultDbConnKey);
 
             $query = "DELETE FROM ". self::$tb_prefixes[$dbConnKey].($class)::TABLE;
@@ -576,6 +523,8 @@ final class DB {
                 $result->execute($params);
 
                     if (isset(self::$backups[$dbConnKey])) {
+                        // delete in backup databases
+
                         foreach (self::$backups[$dbConnKey] as $db_key) {
                             self::$pdos[$db_key]->prepare($query)->execute($params);
                         }
@@ -592,6 +541,46 @@ final class DB {
                 }
             }
         }
+
+        /**
+         * @return int rows count deleted
+         */
+        final static function deleteId (string $class, int $id): int
+        {
+            $dbConnKey = (defined("{$class}::DB_CONN_KEY") ? ($class)::DB_CONN_KEY : self::$defaultDbConnKey);
+
+            $query = "DELETE FROM ". self::$tb_prefixes[$dbConnKey].($class)::TABLE . " WHERE ". ($class)::PRIMARY_KEY .' = '. $id .';';
+
+            try {
+                ($class)::__beforeDeleteId($id);
+
+                $result = self::$pdos[$dbConnKey]->prepare($query);
+                $result->execute();
+
+                ($class)::__afterDeleteId($id);
+
+
+                    if (isset(self::$backups[$dbConnKey])) {
+                        // delete in backup databases
+
+                        foreach (self::$backups[$dbConnKey] as $db_key) {
+                            self::$pdos[$db_key]->prepare($query)->execute();
+                        }
+                    }
+
+
+                return $result->rowCount();
+            }
+            catch (PDOException $e) {
+                if (StaticHandler::isCRON() == false) {
+                    DevToolDebug::print_pdo_exception($e, $query);
+                }
+                else {
+                    throw new Exception($e->getMessage(), $e->getCode(), $e);
+                }
+            }
+        }
+
 
     /* DDL (Data Definition Language) */
 
@@ -775,6 +764,7 @@ final class DB {
             }
         }
 
+
     /* Import SQL file */
         final static function importSqlFile (string $sql_filepath): bool {
         	$sql = ''; // SQL variable, used to store current query.
@@ -811,4 +801,155 @@ final class DB {
 
         	return true;
         }
+
+
+    final private static function prefix (string $tb_prefix, string $query, bool $dml_dql = false, bool $ddl = false): string
+    {
+        // table.*          => pr_table.*
+        // table.column     => pr_table.column
+        // table.`column`   => pr_table.`column`
+        $query = preg_replace(
+            "/(^|\(|\s|,) ((?:\w+\.\*) | (?:\w+\.\w+(?::lg)?) | (?:\w+\.`\w+(?::lg)?`)) (,|\s|\)|;|$)/x",
+            '$1'.$tb_prefix.'$2$3',
+            $query
+        );
+
+        // `table`.*        => `pr_table`.*
+        // `table`.column   => `pr_table`.column
+        // `table`.`column` => `pr_table`.`column`
+        $query = preg_replace(
+            "/(^|\(|\s|,) (`) ((?:\w+`\.\*) | (?:\w+`\.\w+(?::lg)?) | (?:\w+`\.`\w+(?::lg)?`)) (,|\s|\)|;|$)/x",
+            '$1$2'.$tb_prefix.'$3$4',
+            $query
+        );
+
+        // FOREIGN KEY column REFERENCES table(column) => FOREIGN KEY column REFERENCES pr_table(column)
+        $query = preg_replace(
+            "/ (FOREIGN \s+ KEY \s+ \(\w+\) \s+ REFERENCES \s+) (\w+ \(\w+\)) /x",
+            '$1'.$tb_prefix.'$2',
+            $query
+        );
+
+        if ($dml_dql || $ddl) {
+            $commands = array();
+
+            // Data Manipulation Language (DML) && Data Query Language (DQL)
+            if ($dml_dql) {
+                $commands = array_merge($commands, array(
+                    'INSERT INTO', 'UPDATE', 'FROM'
+                ));
+            }
+
+            // Data Definition Language (DDL)
+            if ($ddl) {
+                $commands = array_merge($commands, array(
+                    'CREATE TABLE', 'DROP TABLE', 'ALTER TABLE', 'TRUNCATE TABLE'
+                ));
+            }
+
+            // table => pr_table
+            $query = preg_replace(
+                // "/(^|\(|\s|,) ((?:INSERT INTO) | (?:UPDATE) | (?:FROM) | (?:CREATE TABLE) | (?:DROP TABLE) | (?:ALTER TABLE) | (?:TRUNCATE TABLE)) (\s+) (\w+) (,|\s|\)|;|$)/x",
+                "/(^|\(|\s|,) (".implode(' | ', array_map(function($command) {
+                    return "(?:$command)";
+                }, $commands)).") (\s+) (\w+) (,|\s|\)|;|$)/x",
+                '$1$2$3'.$tb_prefix.'$4$5',
+                $query
+            );
+
+            // `table` => `pr_table`
+            $query = preg_replace(
+                // "/(^|\(|\s|,) ((?:INSERT INTO) | (?:UPDATE) | (?:FROM) | (?:CREATE TABLE) | (?:DROP TABLE) | (?:ALTER TABLE) | (?:TRUNCATE TABLE)) (\s+`) (\w+`) (,|\s|\)|;|$)/x",
+                "/(^|\(|\s|,) (".implode(' | ', array_map(function($command) {
+                    return "(?:$command)";
+                }, $commands)).") (\s+`) (\w+`) (,|\s|\)|;|$)/x",
+                '$1$2$3'.$tb_prefix.'$4$5',
+                $query
+            );
+        }
+
+        return $query;
+    }
+
+    final private static function languages (string $dbConnKey, string $query, string $class, array &$params = NULL): string
+    {
+        $regex = "/(^|\(|\s|,|`)((".self::$tb_prefixes[$dbConnKey].")(\w+)\.)?(\w+)(:lg)((\s+AS\s+\w+)(:lg))?(`|,|\s|\)|;|$)/i";
+
+        if (preg_match($regex, $query, $matches)) {
+            $nr_langs_per_column = array(); // for replacing ?:lg with real count of placeholders
+
+            $languages = NULL;
+
+            if (empty($params[':lg'])) {
+                if (($class)::translationTimes() > 0) {
+                    $languages = array((($class)::TRANSLATOR)::get());
+                }
+                else {
+                    throw new Exception(
+                        "|Arshwell| ".static::class."::languages() query can't replace :lg placeholders;
+                        Should be send as params or fetched from your class const TRANSLATOR"
+                    );
+                }
+            }
+
+            $query = preg_replace_callback(
+                $regex,
+                function ($matches) use ($languages, $params, &$nr_langs_per_column) {
+                    /***************** example ******************
+                    $matches (
+                        [0] =>  br_services.title:lg AS anaaremere:lg,
+                        [1] =>
+                        [2] => br_services.
+                        [3] => br_
+                        [4] => services
+                        [5] => title
+                        [6] => :lg
+                        [7] =>  AS anaaremere:lg
+                        [8] =>  AS anaaremere
+                        [9] => :lg
+                        [10] => ,
+                    )
+                    ********************************************/
+
+                    if (!empty($params[':lg'])) {
+                        $languages = (array)($params[':lg'][$matches[4].'.'.$matches[5]] ?? $params[':lg']);
+                    }
+
+                    $nr_langs_per_column[] = count($languages); // record languages mentioned for this column
+
+                    return $matches[1].implode(',', array_map(function (string $lg) use ($matches) {
+                        return $matches[2].$matches[5].'_'.$lg.($matches[7] ? $matches[8].'_'.$lg : '');
+                    }, $languages)).$matches[10];
+                },
+                $query
+            );
+
+            // Create all necessary placeholders
+            // according to every mentioned languages of the column.
+            foreach ($nr_langs_per_column as $nr) {
+                $query = preg_replace('/\?\:lg/', rtrim(str_repeat('?, ', $nr), ", "), $query, 1);
+            }
+            foreach ($nr_langs_per_column as $nr) {
+                $query = preg_replace('/(\:\w+)\:lg/', rtrim(str_repeat('$1, ', $nr), ", "), $query, 1);
+            }
+
+            unset($params[':lg']); // destroy if exists
+        }
+
+        return $query;
+    }
+
+    final private static function normalizeOrphansSetters(string $set): string
+    {
+        return preg_replace("/(?<=^|,)(\s*\w+(\:lg)?)\s*(?=(,|$))/x", "$1 = ?", $set);
+
+        /* Back up for preg_replace() regex.
+            Add to unassigned columns, from $sql['set'], an " = ?".
+
+            1. preg_replace(['/([a-zA-Z]+)\s*(?:(,)|$)/i', '/ +,/i'], ['\1 = ?\2', ','], $sql['set']);
+            2. preg_replace("/ (?<= ^|,|,\s)  ([a-z]+)  (?=\s*(,|$)) /x", "$1 = ?", $sql['set']);
+            3. preg_replace("/(?<=^|,)(\s*\w+(\:lg)?)\s*(?=(,|$))/x", "$1 = ?", $sql['set']);
+
+        TODO: Don't delete this comment 'till you are sure that used preg_replace() is perfect always */
+    }
 }

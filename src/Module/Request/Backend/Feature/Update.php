@@ -48,7 +48,9 @@ final class Update {
                                     ($back['DB']['table'])::PRIMARY_KEY .' = '. $query['id']
                                 );
 
-                                $response['data'][$key] = new TableColumn($class, $field['DB']['column'] .' IN ('. implode(', ', $ids) .')', $column);
+                                if ($ids) {
+                                    $response['data'][$key] = new TableColumn($class, $field['DB']['column'] . ' IN (' . implode(', ', $ids) . ')', $column);
+                                }
                             }
                         }
                         else {

@@ -520,11 +520,12 @@ final class Piece {
                                                         break;
                                                     }
                                                     case 'select': {
-                                                        if (!empty($HTML['multiple'])) {
-                                                            echo implode(', ', $value);
-                                                        }
-                                                        else {
-                                                            echo ($HTML['values'][$value] ?? $value);
+                                                            if ($value) {
+                                                                if (!empty($HTML['multiple'])) {
+                                                                    echo implode(', ', $value);
+                                                                } else {
+                                                                    echo ($HTML['values'][$value] ?? $value);
+                                                                }
                                                         }
                                                         break;
                                                     }

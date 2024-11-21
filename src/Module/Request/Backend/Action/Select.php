@@ -67,7 +67,20 @@ class Select {
                             $column = $back['fields'][$key]['DB']['column'];
                             $suffix = (($back['DB']['table'])::translationTimes($column) > 0 ? ':lg' : '');
 
-                            return ($back['DB']['table'])::TABLE .'.'. ($column.$suffix . (is_numeric($value) ? (' = '. $value) : (' = "'. $value .'"')));
+                            if (empty($back['fields'][$key]['DB']['one2many'])) {
+                                return ($back['DB']['table'])::TABLE . '.' . ($column . $suffix . (is_numeric($value) ? (' = ' . $value) : (' = "' . $value . '"')));
+                            } else {
+                                $table = $back['fields'][$key]['DB']['table'];
+
+                                $ids = ($table)::column(
+                                    $column . (($table)::translationTimes($column) > 0 ? ':lg' : ''),
+                                    ($table)::PRIMARY_KEY . ' = ' . $value
+                                );
+
+                                if ($ids) {
+                                    return ($back['DB']['table'])::TABLE . '.' . ($back['DB']['table'])::PRIMARY_KEY . ' IN (SELECT ' . ($back['DB']['table'])::PRIMARY_KEY . ' FROM ' . ($table)::TABLE . ' WHERE ' . ($column . $suffix  . ' IN (' . implode(', ', $ids) . ')') . ')';
+                                }
+                            }
                         }, $values)) . ')');
                     }
 
@@ -119,6 +132,8 @@ class Select {
                     $column = ($field['DB']['join']['column'] ?? $field['DB']['column'] ?? NULL);
 
                     if (in_array($key, $query['columns'])) {
+                        $row[$key] = null;
+
                         if ($column) {
                             if (empty($field['DB']['one2many'])) {
                                 // single join
@@ -178,7 +193,9 @@ class Select {
                                     ($back['DB']['table'])::PRIMARY_KEY .' = '. $id_table
                                 );
 
-                                $row[$key] = new TableColumn($class, $field['DB']['column'] .' IN ('. implode(', ', $ids) .')', $column);
+                                if ($ids) {
+                                    $row[$key] = new TableColumn($class, $field['DB']['column'] . ' IN (' . implode(', ', $ids) . ')', $column);
+                                }
                             }
                         }
 

@@ -43,7 +43,7 @@ final class TableColumn implements TableSegment {
                 }
             }
             else {
-                $input = array_column(DB::select(array(
+                $input[$key] = array_column(DB::select(array(
                     'class'     => $class,
                     'columns'   => ($class)::PRIMARY_KEY .','. $key,
                     'where'     => $where

@@ -366,9 +366,22 @@ final class DB
             $query = self::languages($dbConnKey, $query, $class, $params);
 
             try {
+            $result = self::$pdos[$dbConnKey]->prepare($query);
+
+            if ($params) {
+                foreach ($params as $p => $param) {
+                    $result->bindValue(
+                        is_int($p) ? ($p) + 1 : $p,
+                        $param,
+                        // really check if integer, because very long digits crash
+                        (is_numeric($param) && $param == (int)$param) ? PDO::PARAM_INT : PDO::PARAM_STR
+                    );
+                }
+            }
+
                 ($class)::__beforeInsert();
 
-                self::$pdos[$dbConnKey]->prepare($query)->execute($params);
+            $result->execute();
 
                 ($class)::__afterInsert(self::$pdos[$dbConnKey]->lastInsertId());
 
@@ -413,9 +426,9 @@ final class DB
                 $result = self::$pdos[$dbConnKey]->prepare($query);
 
                 if ($params) {
-                    foreach ($params as $dbConnKey => $param) {
+                foreach ($params as $p => $param) {
                         $result->bindValue(
-                            is_int($dbConnKey) ? ($dbConnKey)+1 : $dbConnKey,
+                        is_int($p) ? ($p) + 1 : $p,
                             $param,
                             // really check if integer, because very long digits crash
                             (is_numeric($param) && $param == (int)$param) ? PDO::PARAM_INT : PDO::PARAM_STR
@@ -465,9 +478,9 @@ final class DB
                 $result = self::$pdos[$dbConnKey]->prepare($query);
 
                 if ($params) {
-                    foreach ($params as $dbConnKey => $param) {
+                foreach ($params as $p => $param) {
                         $result->bindValue(
-                            is_int($dbConnKey) ? ($dbConnKey)+1 : $dbConnKey,
+                        is_int($p) ? ($p) + 1 : $p,
                             $param,
                             // really check if integer, because very long digits crash
                             (is_numeric($param) && $param == (int)$param) ? PDO::PARAM_INT : PDO::PARAM_STR

@@ -97,12 +97,12 @@ final class Cache
 
         /** @var \SplFileInfo $file */
         foreach ($iterator as $file) {
-            if ($file->isFile() && strpos($file->getFilename(), $word) !== false) {
-                if (unlink($file->getPathname()) == false) {
+            if ($file->isFile()) {
+                if (strpos($file->getFilename(), $word) !== false && unlink($file->getPathname()) == false) {
                     return false;
                 }
-            } elseif ($file->isDir() && strpos($file->getPath(), $word) !== false) {
-                if (Folder::remove($file->getPath()) == 0) {
+            } elseif ($file->isDir()) {
+                if (strpos($file->getPath(), $word) !== false && Folder::remove($file->getPath()) == 0) {
                     return false;
                 }
             }

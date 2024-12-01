@@ -95,9 +95,14 @@ final class Cache
     {
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(Folder::root() . self::$folder));
 
+        /** @var \SplFileInfo $file */
         foreach ($iterator as $file) {
             if ($file->isFile() && strpos($file->getFilename(), $word) !== false) {
                 if (unlink($file->getPathname()) == false) {
+                    return false;
+                }
+            } elseif ($file->isDir() && strpos($file->getPath(), $word) !== false) {
+                if (Folder::remove($file->getPath()) == 0) {
                     return false;
                 }
             }
